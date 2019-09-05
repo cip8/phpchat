@@ -27,27 +27,19 @@ class Broadcast
      * @param   ConnectionInterface $connection
      * @return  void
      */
-    public function toThis(ConnectionInterface $connection)
+    public function toThis(ConnectionInterface $connection) : void
     {
         $connection->send($this->event);
     }
 
     /**
-     * Broadcasts event to the other connected user
+     * Broadcasts event to given connection ID
      *
-     * @param   array           $users
-     * @param   conversations   $conversations
+     * @param   int     $connectionId
      * @return  void
      */
-    public function toConversation(array $users, array $conversations)
+    public function to(int $connectionId) : void
     {
-        foreach ($conversations as $cId => $conversation) { // h
-            if (
-                $conversation['user_1'] === $users[0] &&
-                $conversation['user_2'] === $users[1]
-            ) {
-                $this->connections[$cId]->send($this->event);
-            }
-        }
+        $this->connections[$connectionId]->send($this->event);
     }
 }

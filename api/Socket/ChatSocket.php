@@ -16,8 +16,8 @@ class ChatSocket extends SocketBase implements MessageComponentInterface
     use ChatEventsTrait;
 
     protected $connections;
-
     protected $conversations;
+    protected $sessionId;
 
     /**
      * Called when a new connection is opened
@@ -63,13 +63,20 @@ class ChatSocket extends SocketBase implements MessageComponentInterface
         $user_1 = $this->conversations[$cId]['user_1'];
         $user_2 = $this->conversations[$cId]['user_2'];
 
-        $this->broadcast(
-            new UserExit($user_1, 'has left the conversation')
-        )->toConversation([$user_2, $user_1], $this->conversations);
+        $recipientSessionId = isset($this->sessionId[$user_2][$user_1])
+                                    ? $this->sessionId[$user_2][$user_1]
+                                    : false;
+
+        if ($recipientSessionId) {
+            $this->broadcast(
+                new UserExit($user_1, 'has left the conversation')
+            )->to($recipientSessionId);
+        }
 
         unset(
             $this->connections[$cId], 
-            $this->conversations[$cId]
+            $this->conversations[$cId],
+            $this->sessionId[$user_1][$user_2]
         );
     }
 
@@ -77,8 +84,8 @@ class ChatSocket extends SocketBase implements MessageComponentInterface
      * If there is an error with one of the sockets, or somewhere in the application where an Exception is thrown, the Exception is sent back down the stack, handled by the Server and bubbled back up the application through this method
      * 
      * @param   ConnectionInterface     $connection
-     * @param   \Exception              $e
-     * @throws  \Exception
+     * @param   Exception              $e
+     * @throws  Exception
      */
     public function onError(ConnectionInterface $connection, Exception $e)
     {

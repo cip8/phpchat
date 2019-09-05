@@ -29,9 +29,15 @@ trait ChatEventsTrait
         $user_1 = $this->conversations[$cId]['user_1'];
         $user_2 = $this->conversations[$cId]['user_2'];
 
-        $this->broadcast(
-            new MessageEvent($user_1, $message)
-        )->toConversation([$user_2, $user_1], $this->conversations);
+        $recipientSessionId = isset($this->sessionId[$user_2][$user_1])
+                                    ? $this->sessionId[$user_2][$user_1]
+                                    : false;
+
+        if ($recipientSessionId) {
+            $this->broadcast(
+                new MessageEvent($user_1, $message)
+            )->to($recipientSessionId);
+        }
 
         // Stores message in the database
         $store = (new Message())->store(
@@ -49,11 +55,13 @@ trait ChatEventsTrait
             // Broadcasts error to both users
             $this->broadcast(
                 new Error($errorMessage)
-            )->toConversation([$user_1, $user_2], $this->conversations);
+            )->toThis($connection);
 
-            $this->broadcast(
-                new Error($errorMessage)
-            )->toConversation([$user_2, $user_1], $this->conversations);
+            if ($recipientSessionId) {
+                $this->broadcast(
+                    new Error($errorMessage)
+                )->to($recipientSessionId);
+            }
         }
     }
 
@@ -68,10 +76,8 @@ trait ChatEventsTrait
     {
         $cId = $connection->resourceId;
 
-        $authUsers = $this->logInUsers([
-            'user_1' => $payload->data->user_from,
-            'user_2' => $payload->data->user_to
-        ], $cId);
+        // Tries to 'authenticate' the user & create a conversation
+        $authUsers = $this->logInUsers($payload->data->user_from, $payload->data->user_to, $cId);
 
         if ($authUsers !== true) {
             $errorMessage = "Username {$authUsers['failed']} doesn't exist - please create a new account!";
@@ -84,42 +90,51 @@ trait ChatEventsTrait
             )->toThis($connection);
         } 
 
-        // Broadcasts the history between the two given users
         $user_1 = $this->conversations[$cId]['user_1'];
         $user_2 = $this->conversations[$cId]['user_2'];
 
+        $this->sessionId[$user_1][$user_2] = $cId;
+        // $saveSession = (new Session())->store($user_1, $user_2);
+        
+        // Broadcasts the history between the two given users
         $this->broadcast(
             new History($user_1, $user_2)
         )->toThis($connection);
 
-        // Notifies the recipient that current user(_1) is online
-        $this->broadcast(
-            new UserEnter($user_1, 'has just joined the conversation')
-        )->toConversation([$user_2, $user_1], $this->conversations);
+        $recipientSessionId = isset($this->sessionId[$user_2][$user_1])
+                                    ? $this->sessionId[$user_2][$user_1]
+                                    : false;
 
-        // Checks the current status of the other user(_2)
-        foreach ($this->conversations as $conversation) { // h
-            if (
-                $conversation['user_1'] === $user_2 &&
-                $conversation['user_2'] === $user_1
-            ) {
-                $this->broadcast(
-                    new UserEnter($user_2, 'is online right now')
-                )->toThis($connection);
-            }
+        if ($recipientSessionId) {
+            // Notifies the recipient that current user(_1) is online
+            $this->broadcast(
+                new UserEnter($user_1, 'has just joined the conversation')
+            )->to($recipientSessionId);
+
+            $this->broadcast(
+                new UserEnter($user_2, 'is online right now')
+            )->toThis($connection);
         }
     }
 
     /**
-     * Checks if given users exist in the database & 'logs' them into the app
+     * Checks if given users exist in the database
+     * and creates a conversation for them
      *
-     * @param   array   $userNames
+     * @param   string  $user_from
+     * @param   string  $user_to
      * @param   int     $cId        Connection ID#
      * @return  void
      */
-    private function logInUsers(array $userNames, int $cId) 
+    private function logInUsers(string $user_from, string $user_to, int $cId) 
     {
+        $userNames = [ 
+            'user_1' => $user_from,
+            'user_2' => $user_to 
+        ];
+
         foreach($userNames as $key => $userName) {
+
             $user = (new User())->findByUsername($userName);
             
             if (!$user) {
@@ -127,11 +142,12 @@ trait ChatEventsTrait
                     'failed' => $userName
                 ];
             }
-            
+
             // Stores info about user_1 & user_2
             $this->conversations[$cId][$key] = $user->getId();
         }
 
         return true;
     }
+
 }
