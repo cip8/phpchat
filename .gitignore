@@ -1,0 +1,24 @@
+# Temporary dumps
+/_extra
+
+# OS related files
+.*
+.Spotlight-V100
+thumbs.db
+Thumbs.db
+
+# Backup copies created by various editors or development tools
+*~
+
+# Thumbnails
+._*
+
+# MacOS
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+.Trashes
+
+# Keep some hidden files
+!/.gitignore
